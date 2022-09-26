@@ -1,0 +1,3 @@
+[submodule "ESP8266-Simple-Recon"]
+	path = ESP8266-Simple-Recon
+	url = https://github.com/alexlynd/ESP8266-Simple-Recon
