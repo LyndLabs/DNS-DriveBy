@@ -28,9 +28,11 @@ char* canaryToken = ".canarytokens.com";
 
 char ssid[MAX_SSID_LEN] = "";
 
+
+
 void setup() { 
   Serial.begin(SERIAL_BAUD);
-  Serial.println();Serial.println("######################\nInitializing DNS-Driveby");
+  Serial.println();Serial.println("######################\n[+][####] Initializing DNS-Driveby!");
   gpsSerial.begin(9600);
   delay(500);
 
@@ -49,7 +51,7 @@ void setup() {
   Serial.println();
   Serial.println("[+][GPS ] Current fix: (" + String(tinyGPS.location.lat(), 5) + "," + String(tinyGPS.location.lng(), 5) + ")");
 
-  Serial.println("[+][####] Starting tracker!");
+  Serial.println("[+][####] Starting DNS-Driveby!");
 
   WiFi.softAPdisconnect();
   WiFi.disconnect();
@@ -60,93 +62,51 @@ void setup() {
   prevTime = millis();
 }
 
-void connect(char* networkName) {
-if(WiFi.status() != WL_CONNECTED) {
-    // delay(WIFI_DELAY);
-    /* Global ssid param need to be filled to connect. */
-    if(strlen(networkName) > 0) {
-      /* No pass for WiFi. We are looking for non-encrypteds. */
-      WiFi.begin(networkName);
-      unsigned short try_cnt = 0;
-      /* Wait until WiFi connection but do not exceed MAX_CONNECT_TIME */
-      while (WiFi.status() != WL_CONNECTED) {
-        // delay(WIFI_DELAY);
-        Serial.print(".");
-        delay(0);
-        // try_cnt++;
-      }
-      if(WiFi.status() == WL_CONNECTED) {
-        Serial.println("");
-        Serial.println("Connection Successful!");
-        Serial.println("Your device IP address is ");
-        Serial.println(WiFi.localIP());
-        IPAddress resolvedIP;
-        unsigned long currentTime = millis();
-        unsigned long prevTime = millis(); 
-        while (!WiFi.hostByName("thvi5jop5ee0v1i16v57xlnvt.canarytokens.com", resolvedIP)) {
-            currentTime = millis();
-            if (prevTime-currentTime >=5000) {
-              Serial.println("Failed to resolve.");
-              break;
-            }   
-        }
-
-        
-        
-        Serial.print("DNS request made to: ");
-        Serial.println(resolvedIP);
-
-      } else {
-        Serial.println("Connection FAILED");
-      }
-    } else {
-      Serial.println("No open networks available. :-(");  
-    }
-  }
-}
-
-
 // look for open networks & try to send DNS request
 void showOpenNets(int networks) {
   memset(ssid, 0, MAX_SSID_LEN);
 
   uint8_t openNets=0;
-  // sort by signal strength
+
   if (networks == 0) {
     Serial.println("0 available");
+    scanning = false; return;
   } 
 
   else {
-    // Serial.print(networks); Serial.println(" networks discovered.");
     int indices[networks];
     for (int i = 0; i < networks; i++) { indices[i] = i; if(WiFi.encryptionType(indices[i]) == ENC_TYPE_NONE) {openNets++;} }
+    if (openNets == 0) { scanning = false; return; }
+
     for (int i = 0; i < networks; i++) {
       for (int j = i + 1; j < networks; j++) {
         if (WiFi.RSSI(indices[j]) > WiFi.RSSI(indices[i])) { std::swap(indices[i], indices[j]); }
       }
     }
     Serial.print(openNets); Serial.println(" available");
+
     // try to connect to open WiFi networks
     for (int i = 0; i < networks; i++) {
       if(WiFi.encryptionType(indices[i]) == ENC_TYPE_NONE) {
         memset(ssid, 0, MAX_SSID_LEN);
         strncpy(ssid, WiFi.SSID(indices[i]).c_str(), MAX_SSID_LEN);
+
         WiFi.begin(ssid);
         Serial.print("[+][WiFi] Connecting to: "); Serial.println(ssid);
         Serial.print("[+][WiFi] ");
 
 
-      unsigned short try_cnt = 0;
+        unsigned short try_cnt = 0;
 
-      /* Wait until WiFi connection but do not exceed MAX_CONNECT_TIME */
-      unsigned long currWiFi = millis();
-      unsigned long prevWiFi = millis();
+        /* Wait until WiFi connection but do not exceed MAX_CONNECT_TIME */
+        unsigned long currWiFi = millis();
+        unsigned long prevWiFi = millis();
 
-      while (WiFi.status() != WL_CONNECTED and (currWiFi-prevWiFi<5000)) {
-        currWiFi = millis();
-        delay(WIFI_DELAY);
-        Serial.print(".");
-      }
+        while (WiFi.status() != WL_CONNECTED and (currWiFi-prevWiFi<5000)) {
+          currWiFi = millis();
+          delay(WIFI_DELAY);
+          Serial.print(".");
+        }
 
       Serial.println();
       
@@ -158,35 +118,45 @@ void showOpenNets(int networks) {
           IPAddress resolvedIP;
           while(WiFi.status() == WL_CONNECTED and gpsData.count()>0) {
             char dnsReq[253];
-            char* tmpGPSddata = (char*) gpsData.pop();
+            char* tmpGPSddata = (char*) gpsData.peek();
             sprintf(dnsReq,"%s.G%d.%s",tmpGPSddata,27,canaryToken);
             Serial.print("[+][DNS ] Making request to Canary Token: ");
             Serial.println(tmpGPSddata);
 
             unsigned long currDNSTime = millis();
             unsigned long prevDNSTime = millis(); 
-            while(!WiFi.hostByName(dnsReq, resolvedIP)) {
-              currDNSTime = millis();
-              if (prevDNSTime-currDNSTime >=5000) {
-                Serial.println("[-][DNS ] Failed to send data.");
-                return;
-              }
-              else {
-                Serial.println("[+][DNS ] Data sent successfully.");
-              }
-            }
-          }
 
-          scanning = false;
+            if (WiFi.hostByName(dnsReq, resolvedIP)) {
+              Serial.println("[+][DNS ] Data sent successfully.");
+              gpsData.pop();
+            }
+            else {
+              while(!WiFi.hostByName(dnsReq, resolvedIP)) {
+                currDNSTime = millis();
+
+                if (prevDNSTime-currDNSTime >=5000) {
+                  Serial.println("[-][DNS ] Failed to send data.");
+                  break;
+                }
+              }
+              Serial.println("[+][DNS ] Data sent successfully.");
+            }
+            
+          }
+          if (gpsData.count() == 0) { scanning = false; return; }
       }
       else {
-        Serial.println("[-][WiFi] Timed out :(");
+        Serial.println("[-][WiFi] Can't connect :(");
         break;
       }
       }
     }
+    Serial.println("[-][WiFi] Exhausted all open networks, scanning again.");
+    scanning = false; return;
   }
 }
+
+/*** Log & encode GPS coordinates to base32 ***/
 
 void gpsScan() {
   currTime = millis();
@@ -201,16 +171,9 @@ void gpsScan() {
     double tmpLat = tinyGPS.location.lat();
     double tmpLng = tinyGPS.location.lng();
 
-    // Serial.print(tinyGPS.location.lat(), 5);Serial.print(",");Serial.print(tinyGPS.location.lng(), 5);Serial.print(",");
-    // Serial.print(second());Serial.print(":");Serial.print(minute());Serial.print(":");Serial.print(hour()); Serial.print(",");
-    // Serial.print(month());Serial.print(":");Serial.print(day());Serial.print(":");Serial.print(year());
-    // Serial.println();
-
     char can[39]; sprintf(can, "%010.5f,%010.5f,%02d/%02d/%02d-%02d:%02d:%02d",tmpLat,tmpLng,mn,dy,yr,hr,min,sec);
     byte* can32; base32.toBase32((byte*) can,sizeof(can),(byte*&)can32,false);
     gpsData.push(can32);
-    // Serial.print(gpsData.count()); Serial.print(": ");
-    // Serial.println((char*) can32);    
   }
   smartDelay(LOG_RATE);
   if (millis() > 5000 && tinyGPS.charsProcessed() < 10)
