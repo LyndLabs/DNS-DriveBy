@@ -1,0 +1,3 @@
+(sym_lib_table
+  (lib (name "DNS-DriveBy")(type "KiCad")(uri "${KIPRJMOD}/DNS-DriveBy.kicad_sym")(options "")(descr ""))
+)
