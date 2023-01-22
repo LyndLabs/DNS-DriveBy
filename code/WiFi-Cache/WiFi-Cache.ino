@@ -1,31 +1,19 @@
-#include "Queue.h"
-
-// FIFO oldest 50 gps coordinates as float
-Queue<byte*> gpsData = Queue<byte*>(10000);
-
-// current GPS Data to push as byte
-byte* currentGPSdata = {};
-
-
-uint8_t currentCoord = 0;
-
-
-float lon = -118.12345;
-
 void setup() {
+    uint64_t fun = 112233445566;
     Serial.begin(115200);
+    Serial.println("Testing:");
+    for (int i=0; i<12; i++) {
+        Serial.println(giveDigit(fun,i));
+    }
 }
+
 
 void loop() {
-    gpsLog();
+
 }
 
-void gpsLog() {
-    
-    update
-}
-
-// push current
-void storeLogToROM() {
-
+uint8_t giveDigit(uint64_t fuck, uint8_t place) {
+    Serial.println(fuck);
+    return 0;
+    // return (&fuck/(10^place))%10;e
 }
