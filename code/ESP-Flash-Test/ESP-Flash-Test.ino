@@ -22,7 +22,7 @@ uint32_t pushCounter = 0;   // current index of coordinate being pushed
 ESPFlash<float>    gpsLogFile("/gpsCoordFile");
 ESPFlash<uint32_t> gpsTimeFile("/gpsTimeFile");
 
-Queue<byte*> gpsQueue = Queue<byte*>(MAX_GPS_QUEUE_SIZE*63); // max gps coordinates times 63-byte encoded strings
+Queue<char *> gpsQueue = Queue<char *>(MAX_GPS_QUEUE_SIZE*63); // max gps coordinates times 63-byte encoded strings
 
 void setup() {
     Serial.begin(115200);
@@ -73,16 +73,52 @@ void spiffsToQueue() {
     for(int i = 0; i < min((uint32_t) MAX_GPS_QUEUE_SIZE, coordsCounter); i++) {
         float lat = gpsLogFile.getElementAt(2*i);
         float lon = gpsLogFile.getElementAt((2*i)+1);
-        uint32_t time = gpsTimeFile.getElementAt(i);
-                
-        Serial.printf("%d[%f,%f] @ %u %02d/%02d/%02d-%02d:%02d:%02d: %s\n",i,time,lat,lon,mon,day,year,hour,min,sec,"penis");
+
+        uint32_t date = gpsTimeFile.getElementAt(2*i);
+        uint32_t time = gpsTimeFile.getElementAt((2*i)+1);
+
+        int mon = getPlaceValue(date, 3);
+        int day = getPlaceValue(date, 2);
+        int year = getPlaceValue(date, 1);
+
+        int hour = getPlaceValue(time, 3);
+        int min = getPlaceValue(time, 2);
+        int sec = getPlaceValue(time, 1);
+
+
+        // testing null terminated character
+        char can[39]; sprintf(can, "%010.5f,%010.5f,%02d/%02d/%02d-%02d:%02d:%02d",lat,lon,mon,day,year,hour,min,sec);
+        char *can32; 
         
-        // char* encode = base32.toBase32((byte*) can,sizeof(can),(byte*&)can32,false);
-        // Serial.println(i);
-        // gpsQueue.push();
-        // Serial.print(i); Serial.print(": ");
-        // Serial.println(test.getElementAt(i), 5);
+
+        // expected behavior: len 63 characters
+        Serial.println(base32.toBase32((byte*) can,sizeof(can),(byte*&)can32,false));
+        Serial.printf("%d: [%f,%f] @ %02d/%02d/%02d-%02d:%02d:%02d: %.63s\n",i,lat,lon,mon,day,year,hour,min,sec,can32);
+        
+        // include circle queue variable 
+        // overwrite if hits end of memory
+        gpsQueue.push(can32);
     }
+    canaryTokensRequest();
+}
+
+
+/* 
+  pop GPS Queue & make request to CanaryTokens
+*/
+void canaryTokensRequest() {
+    uint8_t counter = 0; 
+    while (gpsQueue.count()>0) {
+        Serial.print(counter); Serial.print("/"); Serial.print(coordsCounter); Serial.print(": ");
+
+        char subbuff[63];
+        memcpy(subbuff, &gpsQueue.pop()[0], 63);
+        // subbuff[4] = '\0';
+
+        Serial.println(subbuff);
+        counter++;
+    }
+    Serial.println("Finished Queue!!");
 }
 
 /*
@@ -94,8 +130,8 @@ void gpsPoll(uint8_t pollInterval) {
     if (cTime-pTime >= pollInterval*1000) {
         pTime = cTime;
         
-        float cGPSLat = random(1, 500) / 100.0;
-        float cGPSLong = random(1, 500) / 100.0;
+        float cGPSLat = random(1, 500) / 10000.0;
+        float cGPSLong = random(1, 500) / 10000.0;
 
         cGPS[cGPSIndex][0] = cGPSLat;
         cGPS[cGPSIndex][1] = cGPSLong;
@@ -107,7 +143,16 @@ void gpsPoll(uint8_t pollInterval) {
     }
 }
 
+/*
+ *  Return the nth position value of a number
+ */
+
+uint8_t getPlaceValue(uint32_t timeInt, uint8_t placeValue) {
+    uint32_t placeMultiplier = 1; for(uint8_t i=1; i<placeValue; i++) { placeMultiplier*=100; }
+    return uint8_t ((timeInt/(placeMultiplier))%100U);
+}
+
 void loop() {
     gpsPoll(GPS_LOG_INTERVAL);
-    if (cGPSIndex == MAX_GPS_BUFFER_SIZE) { logToROM(); cGPSIndex = 0; } // 
+    if (cGPSIndex == MAX_GPS_BUFFER_SIZE) { logToROM(); cGPSIndex = 0; }
 }

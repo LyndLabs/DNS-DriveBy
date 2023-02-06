@@ -330,7 +330,7 @@
       (scale (xyz 1 1 1))
       (rotate (xyz 0 0 0))
     )
-    (model "/home/alex/Projects/DNS-DriveBy/3d-models/JST-PH-2 v1.step"
+    (model "${KIPRJMOD}/3d-models/JST-PH-2 v1.step"
       (offset (xyz 0 -4.5 0))
       (scale (xyz 1 1 1))
       (rotate (xyz -90 0 0))
@@ -381,7 +381,7 @@
       (net 5 "GPS_TX") (pinfunction "TX") (pintype "input") (tstamp 6db64f46-9e2d-4604-b932-a6f7a66a0d14))
     (pad "4" thru_hole circle (at -3.81 -16) (size 1.524 1.524) (drill 0.762) (layers *.Cu *.Mask)
       (net 18 "GPS-") (pinfunction "GND") (pintype "power_in") (tstamp 9e5493fd-e148-46c4-ab73-9e150e0f216c))
-    (model "/home/alex/Projects/DNS-DriveBy/3d-models/NEO-6M-GPS.step"
+    (model "${KIPRJMOD}/3d-models/NEO-6M-GPS.step"
       (offset (xyz 22.3 -1.6 3))
       (scale (xyz 1 1 1))
       (rotate (xyz 90 0 -90))
@@ -390,6 +390,11 @@
       (offset (xyz -3.8 16 0))
       (scale (xyz 1 1 1))
       (rotate (xyz 0 0 -90))
+    )
+    (model "${KIPRJMOD}/3d-models/NEO-6M-GPS.step" hide
+      (offset (xyz 0 0 0))
+      (scale (xyz 1 1 1))
+      (rotate (xyz 0 0 0))
     )
   )
 
@@ -561,7 +566,7 @@
       (net 14 "unconnected-(U2-Pad15)") (pinfunction "RX") (pintype "input") (tstamp 116b375f-957b-4eda-a12b-df384678f533))
     (pad "16" thru_hole oval (at 22.86 0) (size 2 1.6) (drill 1) (layers *.Cu *.Mask)
       (net 15 "unconnected-(U2-Pad16)") (pinfunction "TX") (pintype "output") (tstamp 1b80aaa4-9cfe-448e-8ff1-d2c69f706b2e))
-    (model "/home/alex/Projects/DNS-DriveBy/3d-models/WEMOS-D1-mini.step"
+    (model "${KIPRJMOD}/3d-models/WEMOS-D1-mini.step"
       (offset (xyz 24.25 -26.75 3))
       (scale (xyz 1 1 1))
       (rotate (xyz -90 0 0))
