@@ -265,6 +265,16 @@ void wifiScan() {
 
         /* --- TEMP --- */
         // REQUEST to DNS Token
+          WiFi.begin("SpectrumSetup-6B", "finishoasis065");             // Connect to the network
+            Serial.print("Connecting to ");
+            Serial.print(ssid); Serial.println(" ...");
+
+            int i = 0;
+            while (WiFi.status() != WL_CONNECTED) { // Wait for the Wi-Fi to connect
+                delay(1000);
+                Serial.print(++i); Serial.print(' ');
+            }
+
         dnsRequest();
 
         // RETURN if no Open Networks
@@ -359,7 +369,7 @@ void dnsRequest() {
             wifiDataB32[counter] = reconB32.getElementAt(j);
             counter++;
         }
-        // Serial.printf("(%u): %s\n",lenCurrentWiFiData,wifiDataB32);
+
         /********** Get DateTime + GPS **********/
         char *gpsB32String = getGPSDateTimeB32(coordsCounter);
         // Serial.printf("  /  (%d/%d): %.63s\n",wifiNetGroup,wifiCount.getElementAt(coordsCounter),gpsB32String);
@@ -367,12 +377,23 @@ void dnsRequest() {
 
         /********** MAKE DNS REQUEST **********/
         char url[63+61+4+3+sizeof(CANARYTOKEN_URL)];
-        sprintf(url,"%.63s.G%d.%.*s.%s",gpsB32String,69,lenCurrentWiFiData,wifiDataB32,CANARYTOKEN_URL);
+        // sprintf(url,"%.63s.%.*s.G%d.%s",gpsB32String,lenCurrentWiFiData,wifiDataB32,69,CANARYTOKEN_URL);
+        // sprintf(url,"%.63s.G%d.%s",gpsB32String,69,CANARYTOKEN_URL);
+        sprintf(url,"%.*s.G%d.%s",lenCurrentWiFiData,wifiDataB32,69,CANARYTOKEN_URL);
         if(WiFi.hostByName(url, resolvedIP)) {
-            Serial.printf("Success: %s",url);
+            Serial.printf("Success: %s\n",url);
         }
         else {
-            Serial.printf("Failure: %s",url);
+            bool success;
+            unsigned long currReq = millis();
+            unsigned long prevReq = millis();
+            while(currReq-prevReq < 2000) {
+                success = WiFi.hostByName(url, resolvedIP);
+                currReq = millis();
+                yield();
+            }
+            if (success) {Serial.printf("Success: %s\n",url);}
+            else {Serial.printf("Failure: %s\n",url);}
         }
 
         
