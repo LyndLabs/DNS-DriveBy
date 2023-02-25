@@ -4,6 +4,8 @@
 #include "Queue.h"
 #include "Base32.h"
 
+#define CANARYTOKEN_URL "2feyjwh66bfsl8qqrugtfldqo.canarytokens.com"
+
 #define GPS_LOG_INTERVAL 2
 #define MAX_GPS_BUFFER_SIZE 10
 #define MAX_GPS_QUEUE_SIZE 50
@@ -177,6 +179,27 @@ uint8_t getPlaceValue(uint32_t timeInt, uint8_t placeValue) {
 }
 
 /* --------------------------------------------------------------*/
+/* -------- Maps default encryption value to values 0-4 -------- */
+/* --------------------------------------------------------------*/
+
+uint8_t getEncryption(uint8_t network) {
+  byte encryption = WiFi.encryptionType(network);
+  switch (encryption) {
+    case 5: 
+        return 0; // WEP
+    case 2: 
+        return 1; // WPA
+    case 4: 
+        return 2; // WPA2
+    case 7: 
+        return 3; // NONE
+    case 8: 
+        return 4; // AUTO
+  }
+  return 5; // change this
+}
+
+/* --------------------------------------------------------------*/
 /* Scans & logs WiFi networks & attempts to connect to open nets */
 /* --------------------------------------------------------------*/
 
@@ -208,8 +231,7 @@ void wifiScan() {
             if(WiFi.SSID(i).length() > 0) {
 
                 /********** Plain Text WiFi String  **********/
-                uint8_t encryption = 0; // WEP, WPA, WPA2, OPN, NA
-                sprintf(wifiString,"%d,%d,%.32s",encryption,WiFi.RSSI(i),WiFi.SSID(i).c_str()); // ENC, RSSI, SSID
+                sprintf(wifiString,"%d,%d,%.32s",getEncryption(WiFi.encryptionType(i)),WiFi.RSSI(i),WiFi.SSID(i).c_str()); // ENC, RSSI, SSID
                 uint8_t lenWifiStr = WiFi.SSID(i).length()+6;
 
                 /********** B32 WiFi String **********/
@@ -314,8 +336,8 @@ void wifiScan() {
 /* Make DNS Request -> CanaryToken & Pop from memory */
 /* --------------------------------------------------------------*/
 
-// char *canaryToken = "2feyjwh66bfsl8qqrugtfldqo.canarytokens.com";
-char dnsReq[163]; // 121char + 42canary
+ // (63) GPS & DateTime B32 + (61) WiFi Metadata B32 + (3) Letter & 2 Digits + (?) CanaryToken URL + (3) Commas
+
 IPAddress resolvedIP;
 uint32_t indexCurrentToken=0;
 
@@ -329,32 +351,37 @@ void dnsRequest() {
 
         /********** Get WiFi & MetaData as B32 String **********/
         uint8_t lenCurrentWiFiData = reconLen.getElementAt(i);
-        Serial.printf("%d/%d [%d] : (%d) ",pushCounter,dataCounter,indexCurrentToken,lenCurrentWiFiData);
+        // Serial.printf("%d/%d [%d] : (%d) ",pushCounter,dataCounter,indexCurrentToken,lenCurrentWiFiData);
 
+        char wifiDataB32[61];
+        uint8_t counter = 0;
         for (uint32_t j=indexCurrentToken; j<indexCurrentToken+lenCurrentWiFiData; j++) {
-            Serial.print(reconB32.getElementAt(j));
+            wifiDataB32[counter] = reconB32.getElementAt(j);
+            counter++;
         }
-
+        // Serial.printf("(%u): %s\n",lenCurrentWiFiData,wifiDataB32);
         /********** Get DateTime + GPS **********/
         char *gpsB32String = getGPSDateTimeB32(coordsCounter);
-        // Serial.printf("  (%d/%d)\n",coordsCounter,wifiCount.getElementAt(coordsCounter));
-        Serial.printf("  /  (%d/%d): %.63s\n",wifiNetGroup,wifiCount.getElementAt(coordsCounter),gpsB32String);
-
-        // TODO: UPLOAD STUFF HERE -> CANARYTOKENS
+        // Serial.printf("  /  (%d/%d): %.63s\n",wifiNetGroup,wifiCount.getElementAt(coordsCounter),gpsB32String);
         
 
+        /********** MAKE DNS REQUEST **********/
+        char url[63+61+4+3+sizeof(CANARYTOKEN_URL)];
+        sprintf(url,"%.63s.G%d.%.*s.%s",gpsB32String,69,lenCurrentWiFiData,wifiDataB32,CANARYTOKEN_URL);
+        if(WiFi.hostByName(url, resolvedIP)) {
+            Serial.printf("Success: %s",url);
+        }
+        else {
+            Serial.printf("Failure: %s",url);
+        }
+
+        
         /********** Keep Track of GPS Coordinates Per Group **********/
+        delete gpsB32String;
         wifiNetGroup++;
         if (wifiNetGroup >= wifiCount.getElementAt(coordsCounter)) {
-            // reset
-            wifiNetGroup =0;
-            coordsCounter++;
+            wifiNetGroup =0; coordsCounter++;
         }
-        // else {
-        //     // reset element counter
-        //     wifiNetGroup = 0;
-        //     coordsCounter++;
-        // }
         
         indexCurrentToken+= lenCurrentWiFiData;
         pushCounter++;
@@ -379,19 +406,18 @@ void dnsRequest() {
     
 
 void loop() {
-    FSInfo fs_info;
-    SPIFFS.info(fs_info);
-
     wifiScan();
-     // test getting pushed elements
-
-    // Serial.print("Ind: ");
-    // Serial.println(reconB32.getElementAt(1));
-    // Serial.print(fs_info.totalBytes); Serial.print(" ");
-    // Serial.println(fs_info.usedBytes);
-    // Serial.println(ESP.getFreeHeap());
-
+    printUsage();
 
     // gpsPoll(GPS_LOG_INTERVAL);
     // if (cGPSIndex == MAX_GPS_BUFFER_SIZE) { logToROM(); cGPSIndex = 0; }
 }
+
+void printUsage() {
+    FSInfo fs_info;
+    SPIFFS.info(fs_info);
+    Serial.printf("Heap: %d // Flash: (%d/%d)",ESP.getFreeHeap(),fs_info.usedBytes,fs_info.totalBytes);
+}
+// TODO:
+// Real GPS coordinates, overflow, push to ram for quicker offset, optimize how quick it dumps
+// Push to CanaryTokens DNS Request
