@@ -1,4 +1,15 @@
+// TODO
+// Real Time
+// Persistent Count Vars
+// Handle Overflow?
+// Optimize String Dumping / Reading
+// More comments
+// Makefile params
+
 #include <ESP8266WiFi.h>
+#include <TinyGPS++.h>
+#include <TimeLib.h>   
+#include <SoftwareSerial.h>
 #include "FS.h"
 #include "ESPFlash.h"
 #include "Queue.h"
@@ -6,13 +17,16 @@
 
 #define CANARYTOKEN_URL "2feyjwh66bfsl8qqrugtfldqo.canarytokens.com"
 
-#define GPS_LOG_INTERVAL 2
+#define WIFI_LOG_INTERVAL 2
 #define MAX_GPS_BUFFER_SIZE 10
 #define MAX_GPS_QUEUE_SIZE 50
 #define MAX_COUNTER 10000
 
 #define WIFI_DELAY        500
 #define MAX_CONNECT_TIME  7000
+
+SoftwareSerial gpsSerial(14, 12); // RX, TX
+TinyGPSPlus tinyGPS;
 
 Base32 base32;
 
@@ -22,12 +36,11 @@ float cGPS[MAX_GPS_BUFFER_SIZE][2];        // lat, long
 uint32_t cGPSTime[MAX_GPS_BUFFER_SIZE][2]; // date, time
 uint8_t cGPSIndex = 0;
 
-/** DEFINE DATA STRUCTURES & COUNTERS*/
-
+/** DEFINE DATA STRUCTURES & COUNTERS **/
 
 uint32_t coordsCounter = 0; // how many coords are stored 
-uint32_t dataCounter = 0; // TOTAL Wi-Fi entries
-uint32_t pushCounter = 0; // Current Wi-Fi Entry to push
+uint32_t dataCounter = 0;   // TOTAL Wi-Fi entries
+uint32_t pushCounter = 0;   // Current Wi-Fi Entry to push
 
 ESPFlash<float>    gpsLogFile("/gpsCoordFile"); // GPS Coordinates
 ESPFlash<uint32_t> gpsTimeFile("/gpsTimeFile"); // DateTime
@@ -45,9 +58,30 @@ void setup() {
     Serial.println("Starting DNS DriveBy!");
     Serial.println("dnsdriveby.com | Alex Lynd, 2023");
     Serial.println("*********************");
-    Serial.print("GPS Poll Rate: "); Serial.print(GPS_LOG_INTERVAL); Serial.println(" seconds");
 
-    Serial.print("Formatting SPIFFS...");
+    gpsSerial.begin(9600);
+    delay(500);
+
+  if (gpsSerial.available() > 0) {
+    Serial.println("[+][GPS ] Trying to get GPS fix");
+    Serial.println("[+][GPS ] ");
+  }
+  else {
+    Serial.println("[-][GPS ] No GPS connected, check wiring.");
+    delay(1000);
+    ESP.reset();
+  }
+  while (!tinyGPS.location.isValid()) {
+    Serial.print(".");
+    delay(0);
+    smartDelay(500);
+  }
+
+    Serial.println();
+    Serial.println("[+][GPS ] Current fix: (" + String(tinyGPS.location.lat(), 5) + "," + String(tinyGPS.location.lng(), 5) + ")");
+    gpsSerial.end();
+
+    Serial.print("[ ] Formatting SPIFFS...");
     SPIFFS.begin();
     Serial.println("Finished!");
 
@@ -55,7 +89,19 @@ void setup() {
     WiFi.disconnect();
     WiFi.mode(WIFI_STA);
     delay(WIFI_DELAY);
-    Serial.println("Started Wi-Fi STATION Mode!");
+    Serial.println("[+] Started Wi-Fi STATION Mode!");
+}
+
+static void smartDelay(unsigned long ms) {
+  unsigned long start = millis();
+  do {
+    while (gpsSerial.available())
+      tinyGPS.encode(gpsSerial.read());
+  } while (millis() - start < ms);
+}
+
+void initializeGPS() {
+ 
 }
 
 /* -------------------------------------------------------------*/
@@ -63,20 +109,51 @@ void setup() {
 /* -------------------------------------------------------------*/
 
 void logGPSDateTime() {
+    WiFi.disconnect(); 
+    WiFi.mode(WIFI_OFF);
+    WiFi.forceSleepBegin();
+    delay(500);
+
+    SPIFFS.end();
 
     /********** GET GPS Data  **********/
-    float lat = 69.12345;
-    float lon = -420.12345;
+    gpsSerial.begin(9600);
+    delay(500);
 
-    uint32_t date = 112233;
-    uint32_t time = 445566;
+    if (gpsSerial.available() > 0) {
+        Serial.print("GPS AVAILABLE");
+    }
+    else {
+        Serial.print("GPS NOT AVAILABLE");
+        delay(1000);
+        ESP.reset();
+    }
 
+    while (!tinyGPS.location.isValid()) {
+        Serial.print(".");
+        delay(0);
+        smartDelay(500);
+    }
+
+    float lat = tinyGPS.location.lat();
+    float lon = tinyGPS.location.lng();
+
+    uint32_t date = (10000 *tinyGPS.date.month()) + (100*tinyGPS.date.day()) + (getPlaceValue(tinyGPS.date.year(),0));
+    uint32_t time = (10000 *tinyGPS.time.hour()) + (100*tinyGPS.time.minute()) + (tinyGPS.time.second());    
+    Serial.printf("%d %d  //  ",lat,lon);
+    gpsSerial.end();
     /**** APPEND to Files in Flash  ****/
+    
+    SPIFFS.begin();
+    delay(500);
+
     gpsLogFile.append(lat); 
     gpsLogFile.append(lon);
 
     gpsTimeFile.append(date);
     gpsTimeFile.append(time);
+
+    
 }
 
 /* -------------------------------------------------------------*/
@@ -129,7 +206,7 @@ uint8_t getEncryption(uint8_t network) {
     case 8: 
         return 4; // AUTO
   }
-  return 5; // change this
+  return 4; // AUTO / fail case
 }
 
 /* --------------------------------------------------------------*/
@@ -138,9 +215,10 @@ uint8_t getEncryption(uint8_t network) {
 
 char ssid[32] = "";
 char wifiString[38]; // 32B SSID, 1B Encryption, 3B RSSI
-char finalString[121];
 
-void wifiScan() {
+void wifiScan(uint8_t wifiScanInterval) {
+
+    // don't scan unless interval
 
     memset(ssid, 0, 32);
     uint8_t openNets=0;
@@ -152,9 +230,9 @@ void wifiScan() {
     /* ------------------------------------------------ */
 
     if (networks == 0) { Serial.println("none found :("); return; }
-    else {  
-        Serial.print(networks); Serial.print(" found!");
-        
+    else {
+        Serial.printf("%02d found!",networks);
+
         unsigned long tmpEntTime = millis();
         unsigned long tmpExitTime = millis();
 
@@ -170,23 +248,24 @@ void wifiScan() {
                 char *wifiDataB32;         
                 uint8_t lenWiFiDataB32 = base32.toBase32((byte*) wifiString,lenWifiStr,(byte*&)wifiDataB32,false);
 
-                /********** LOG WiFi & GPS to Memory  **********/
+                /********** LOG WiFi to Memory  **********/
                 // TODO: Check if char* or char[] matters for call back, String for quicker append?
 
-                // LOG Network Count
                 for(uint8_t i=0; i<lenWiFiDataB32; i++) { reconB32.append(wifiDataB32[i]); }   // LOG WiFi B32 String
                 reconLen.append(lenWiFiDataB32);                                               // LOG size of WiFi SSID
                 
                 // Serial.printf("(%d): %s\n",lenWiFiDataB32, wifiDataB32);
-                logGPSDateTime();                                                                   // LOG GPS + DateTime Info
 
                 delete wifiDataB32;              
                 dataCounter++;               
             }
             tmpExitTime = millis();
         }
+        // Serial.printf();
 
-        Serial.printf("  //  Logged in %d ms  //  Total Nets: %d\n",tmpExitTime-tmpEntTime, dataCounter);
+        Serial.printf("  //  Logged in %06d ms  //  Total Nets: %d  //",tmpExitTime-tmpEntTime, dataCounter);
+        logGPSDateTime(); // LOG GPS + DateTime Info
+        Serial.printf("  GPS SUCCESS\n");
 
         /* ------------------------------------------------ */
         /* ------- CONNECT TO OPEN NETS & PUSH DATA ------- */
@@ -213,7 +292,8 @@ void wifiScan() {
             if(WiFi.encryptionType(indices[i]) == ENC_TYPE_NONE) {
                 memset(ssid, 0, 32);
                 strncpy(ssid, WiFi.SSID(indices[i]).c_str(), 32);
-                WiFi.begin(ssid);
+
+                WiFi.begin("SpectrumSetup-6B","finishoasis065");
                 Serial.print("[+][WiFi] Connecting to: "); Serial.println(ssid);
                 Serial.print("[+][WiFi] ");
 
@@ -226,14 +306,13 @@ void wifiScan() {
                     delay(WIFI_DELAY);
                     Serial.print(".");
                 }
-                Serial.println();
 
 
                 uint8_t dnsReqFails = 0;
                 // if connection successful, create DNS requests
                 if (WiFi.status() == WL_CONNECTED) {
-                    Serial.println("Connected!");
-                    while (WiFi.status() == WL_CONNECTED) {
+                    Serial.println(" connected!");
+                    while (WiFi.status() == WL_CONNECTED and pushCounter < dataCounter) {
                         bool dnsRequestSuccess = dnsRequest();
                         dnsReqFails+= !dnsRequestSuccess;
                         if (dnsReqFails > 3) {
@@ -243,6 +322,7 @@ void wifiScan() {
                             return;
                         }
                     }
+                    Serial.println("Exhausted list.");
                     return;
                 }
                 else {
@@ -260,7 +340,7 @@ void wifiScan() {
 /* Make DNS Request -> CanaryToken & Pop from memory */
 /* --------------------------------------------------------------*/
 
-IPAddress resolvedIP;
+
 uint32_t indexCurrentToken=0;
 
 uint8_t wifiNetGroup = 0;
@@ -270,12 +350,9 @@ bool dnsRequest() {
     bool dnsRequestSuccess;
     // start at index of last pushed
     uint32_t startIndex = pushCounter;
-    // for(uint32_t i=startIndex; i<dataCounter; i++) {
 
         /********** Get WiFi & MetaData as B32 String **********/
         uint8_t lenCurrentWiFiData = reconLen.getElementAt(pushCounter);
-        // Serial.printf("%d/%d [%d] : (%d) ",pushCounter,dataCounter,indexCurrentToken,lenCurrentWiFiData);
-
         char wifiDataB32[61];
         uint8_t counter = 0;
         for (uint32_t j=indexCurrentToken; j<indexCurrentToken+lenCurrentWiFiData; j++) {
@@ -285,18 +362,17 @@ bool dnsRequest() {
 
         /********** Get DateTime + GPS **********/
         char *gpsB32String = getGPSDateTimeB32(coordsCounter);
-        // Serial.printf("  /  (%d/%d): %.63s\n",wifiNetGroup,wifiCount.getElementAt(coordsCounter),gpsB32String);
-        
 
         /********** MAKE DNS REQUEST **********/
         char  gpsURL[63+2+3+sizeof(CANARYTOKEN_URL)]; // 63B - GPS  B32
         char wifiURL[61+2+3+sizeof(CANARYTOKEN_URL)]; // 61B - WiFi B32
-        sprintf(gpsURL,"%.63s.G%d.%s",gpsB32String,69,CANARYTOKEN_URL);
-        sprintf(wifiURL,"%.*s.G%d.%s",lenCurrentWiFiData,wifiDataB32,69,CANARYTOKEN_URL);
 
-        // make DNS Request with WiFi metadata & GPS info
-        if (makeDNSRequest(wifiURL)) { dnsRequestSuccess = makeDNSRequest(gpsURL); }   
-        else                         { dnsRequestSuccess = false;}  
+        sprintf(gpsURL,"%.63s.G%d.%s",gpsB32String,random(10,99),CANARYTOKEN_URL);
+        dnsRequestSuccess = makeDNSRequest(gpsURL);
+        delay(300);
+
+        sprintf(wifiURL,"%.*s.G%d.%s",lenCurrentWiFiData,wifiDataB32,random(10,99),CANARYTOKEN_URL);
+        dnsRequestSuccess = makeDNSRequest(wifiURL);
 
         /********** Keep Track of GPS Coordinates Per Group **********/
         delete gpsB32String;
@@ -308,7 +384,6 @@ bool dnsRequest() {
         indexCurrentToken+= lenCurrentWiFiData;
         pushCounter++;
         return dnsRequestSuccess;
-    // }
 }
 
 /* --------------------------------------------------------------*/
@@ -317,8 +392,9 @@ bool dnsRequest() {
 
 bool makeDNSRequest(char *url) {
     bool success;
+    IPAddress resolvedIP;
     if(WiFi.hostByName(url, resolvedIP)) {
-            Serial.printf("Success: %s\n",url);
+            Serial.printf("[+](%d/%d) (%d/%d) Success: %s\n",pushCounter,dataCounter,wifiNetGroup,wifiCount.getElementAt(coordsCounter),url);
             success = true;
     }
     else {
@@ -330,15 +406,14 @@ bool makeDNSRequest(char *url) {
             currReq = millis();
             yield();
         }
-        if (success) {Serial.printf("Success: %s\n",url);}
-        else         {Serial.printf("Failure: %s\n",url);}
+        if (success) {Serial.printf("[+](%d/%d) (%u.%u.%u.%u) Success: %s\n",pushCounter,dataCounter,resolvedIP[0],resolvedIP[1],resolvedIP[2],resolvedIP[3],url);}
+        else         {Serial.printf("[-](%d/%d) (%u.%u.%u.%u) Failure: %s\n",coordsCounter,wifiCount.getElementAt(coordsCounter),resolvedIP[0],resolvedIP[1],resolvedIP[2],resolvedIP[3],url);}
     }
     return success;
 }
 
 void loop() {
-    wifiScan();
-    // printUsage();
+    wifiScan(WIFI_LOG_INTERVAL);
 }
 
 void printUsage() {
@@ -346,6 +421,3 @@ void printUsage() {
     SPIFFS.info(fs_info);
     Serial.printf("Heap: %d // Flash: (%d/%d)",ESP.getFreeHeap(),fs_info.usedBytes,fs_info.totalBytes);
 }
-// TODO:
-// Real GPS coordinates, overflow, push to ram for quicker offset, optimize how quick it dumps
-// Push to CanaryTokens DNS Request, connect to open wifi?
