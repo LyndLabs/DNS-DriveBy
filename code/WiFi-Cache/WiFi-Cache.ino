@@ -25,7 +25,7 @@
 #define WIFI_DELAY        500
 #define MAX_CONNECT_TIME  7000
 
-SoftwareSerial gpsSerial(14, 12); // RX, TX
+// SoftwareSerial gpsSerial(14, 12); // RX, TX
 TinyGPSPlus tinyGPS;
 
 Base32 base32;
@@ -52,51 +52,53 @@ ESPFlash<uint8_t> reconLen("/reconLen");      // Length of each WiFi entry
 Queue<char *> gpsQueue = Queue<char *>(MAX_GPS_QUEUE_SIZE*63); // max gps coordinates times 63-byte encoded strings
 
 void setup() {
-    Serial.begin(115200);
-    Serial.println(); 
-    Serial.println("*********************");
-    Serial.println("Starting DNS DriveBy!");
-    Serial.println("dnsdriveby.com | Alex Lynd, 2023");
-    Serial.println("*********************");
+    pinMode(1, FUNCTION_3); 
+    pinMode(3, FUNCTION_3); 
+    Serial.begin(9600);
+    // Serial.println(); 
+    // Serial.println("*********************");
+    // Serial.println("Starting DNS DriveBy!");
+    // Serial.println("dnsdriveby.com | Alex Lynd, 2023");
+    // Serial.println("*********************");
 
-    gpsSerial.begin(9600);
+    // gpsSerial.begin(9600);
     delay(500);
 
-  if (gpsSerial.available() > 0) {
-    Serial.println("[+][GPS ] Trying to get GPS fix");
-    Serial.println("[+][GPS ] ");
+  if (Serial.available() > 0) {
+    // Serial.println("[+][GPS ] Trying to get GPS fix");
+    // Serial.println("[+][GPS ] ");
   }
   else {
-    Serial.println("[-][GPS ] No GPS connected, check wiring.");
+    // Serial.println("[-][GPS ] No GPS connected, check wiring.");
     delay(1000);
     ESP.reset();
   }
   while (!tinyGPS.location.isValid()) {
-    Serial.print(".");
+    // Serial.print(".");
     delay(0);
     smartDelay(500);
   }
 
-    Serial.println();
-    Serial.println("[+][GPS ] Current fix: (" + String(tinyGPS.location.lat(), 5) + "," + String(tinyGPS.location.lng(), 5) + ")");
-    gpsSerial.end();
+    // Serial.println();
+    // Serial.println("[+][GPS ] Current fix: (" + String(tinyGPS.location.lat(), 5) + "," + String(tinyGPS.location.lng(), 5) + ")");
+    // Serial.end();
 
-    Serial.print("[ ] Formatting SPIFFS...");
+    // Serial.print("[ ] Formatting SPIFFS...");
     SPIFFS.begin();
-    Serial.println("Finished!");
+    // Serial.println("Finished!");
 
     WiFi.softAPdisconnect();
     WiFi.disconnect();
     WiFi.mode(WIFI_STA);
     delay(WIFI_DELAY);
-    Serial.println("[+] Started Wi-Fi STATION Mode!");
+    // Serial.println("[+] Started Wi-Fi STATION Mode!");
 }
 
 static void smartDelay(unsigned long ms) {
   unsigned long start = millis();
   do {
-    while (gpsSerial.available())
-      tinyGPS.encode(gpsSerial.read());
+    while (Serial.available())
+      tinyGPS.encode(Serial.read());
   } while (millis() - start < ms);
 }
 
@@ -109,51 +111,27 @@ void initializeGPS() {
 /* -------------------------------------------------------------*/
 
 void logGPSDateTime() {
-    WiFi.disconnect(); 
-    WiFi.mode(WIFI_OFF);
-    WiFi.forceSleepBegin();
-    delay(500);
 
-    SPIFFS.end();
 
     /********** GET GPS Data  **********/
-    gpsSerial.begin(9600);
-    delay(500);
 
-    if (gpsSerial.available() > 0) {
-        Serial.print("GPS AVAILABLE");
-    }
-    else {
-        Serial.print("GPS NOT AVAILABLE");
-        delay(1000);
-        ESP.reset();
-    }
-
-    while (!tinyGPS.location.isValid()) {
-        Serial.print(".");
-        delay(0);
-        smartDelay(500);
-    }
+    while (!tinyGPS.time.isValid()) { delay(0); }
 
     float lat = tinyGPS.location.lat();
     float lon = tinyGPS.location.lng();
 
     uint32_t date = (10000 *tinyGPS.date.month()) + (100*tinyGPS.date.day()) + (getPlaceValue(tinyGPS.date.year(),0));
     uint32_t time = (10000 *tinyGPS.time.hour()) + (100*tinyGPS.time.minute()) + (tinyGPS.time.second());    
-    Serial.printf("%d %d  //  ",lat,lon);
-    gpsSerial.end();
-    /**** APPEND to Files in Flash  ****/
-    
-    SPIFFS.begin();
-    delay(500);
+    // Serial.printf("%d %d  //  ",lat,lon);
 
-    gpsLogFile.append(lat); 
+    /**** APPEND to Files in Flash  ****/
+
+    gpsLogFile.append(lat) 
     gpsLogFile.append(lon);
 
     gpsTimeFile.append(date);
     gpsTimeFile.append(time);
 
-    
 }
 
 /* -------------------------------------------------------------*/
@@ -222,16 +200,16 @@ void wifiScan(uint8_t wifiScanInterval) {
 
     memset(ssid, 0, 32);
     uint8_t openNets=0;
-    Serial.print("Scanning networks...");
+    // Serial.print("Scanning networks...");
     int networks = WiFi.scanNetworks(false, false);
 
     /* ------------------------------------------------ */
     /* ---------- LOG ALL NETWORKS -> FLASH  ---------- */
     /* ------------------------------------------------ */
 
-    if (networks == 0) { Serial.println("none found :("); return; }
+    if (networks == 0) { /*Serial.println("none found :(");*/ return; }
     else {
-        Serial.printf("%02d found!",networks);
+        // Serial.printf("%02d found!",networks);
 
         unsigned long tmpEntTime = millis();
         unsigned long tmpExitTime = millis();
@@ -254,18 +232,18 @@ void wifiScan(uint8_t wifiScanInterval) {
                 for(uint8_t i=0; i<lenWiFiDataB32; i++) { reconB32.append(wifiDataB32[i]); }   // LOG WiFi B32 String
                 reconLen.append(lenWiFiDataB32);                                               // LOG size of WiFi SSID
                 
-                // Serial.printf("(%d): %s\n",lenWiFiDataB32, wifiDataB32);
+                // // Serial.printf("(%d): %s\n",lenWiFiDataB32, wifiDataB32);
 
                 delete wifiDataB32;              
                 dataCounter++;               
             }
             tmpExitTime = millis();
         }
-        // Serial.printf();
+        // // Serial.printf();
 
-        Serial.printf("  //  Logged in %06d ms  //  Total Nets: %d  //",tmpExitTime-tmpEntTime, dataCounter);
+        // Serial.printf("  //  Logged in %06d ms  //  Total Nets: %d  //",tmpExitTime-tmpEntTime, dataCounter);
         logGPSDateTime(); // LOG GPS + DateTime Info
-        Serial.printf("  GPS SUCCESS\n");
+        // Serial.printf("  GPS SUCCESS\n");
 
         /* ------------------------------------------------ */
         /* ------- CONNECT TO OPEN NETS & PUSH DATA ------- */
@@ -294,8 +272,8 @@ void wifiScan(uint8_t wifiScanInterval) {
                 strncpy(ssid, WiFi.SSID(indices[i]).c_str(), 32);
 
                 WiFi.begin("SpectrumSetup-6B","finishoasis065");
-                Serial.print("[+][WiFi] Connecting to: "); Serial.println(ssid);
-                Serial.print("[+][WiFi] ");
+                // Serial.print("[+][WiFi] Connecting to: "); Serial.println(ssid);
+                // Serial.print("[+][WiFi] ");
 
                 unsigned long currWiFi = millis();
                 unsigned long prevWiFi = millis();
@@ -304,36 +282,36 @@ void wifiScan(uint8_t wifiScanInterval) {
                 while (WiFi.status() != WL_CONNECTED and (currWiFi-prevWiFi<MAX_CONNECT_TIME)) {
                     currWiFi = millis();
                     delay(WIFI_DELAY);
-                    Serial.print(".");
+                    // Serial.print(".");
                 }
 
 
                 uint8_t dnsReqFails = 0;
                 // if connection successful, create DNS requests
                 if (WiFi.status() == WL_CONNECTED) {
-                    Serial.println(" connected!");
+                    // Serial.println(" connected!");
                     while (WiFi.status() == WL_CONNECTED and pushCounter < dataCounter) {
                         bool dnsRequestSuccess = dnsRequest();
                         dnsReqFails+= !dnsRequestSuccess;
                         if (dnsReqFails > 3) {
-                            Serial.println("Too many failures, disconnecting.");
+                            // Serial.println("Too many failures, disconnecting.");
                             WiFi.disconnect();
                             dnsReqFails = 0;
                             return;
                         }
                     }
-                    Serial.println("Exhausted list.");
+                    // Serial.println("Exhausted list.");
                     return;
                 }
                 else {
-                    Serial.println("[-][WiFi] Can't connect :(");
+                    // Serial.println("[-][WiFi] Can't connect :(");
                     break;
                 }
             }
         }
     }
 
-    Serial.println();
+    // Serial.println();
 }
 
 /* --------------------------------------------------------------*/
@@ -394,7 +372,7 @@ bool makeDNSRequest(char *url) {
     bool success;
     IPAddress resolvedIP;
     if(WiFi.hostByName(url, resolvedIP)) {
-            Serial.printf("[+](%d/%d) (%d/%d) Success: %s\n",pushCounter,dataCounter,wifiNetGroup,wifiCount.getElementAt(coordsCounter),url);
+            // Serial.printf("[+](%d/%d) (%d/%d) Success: %s\n",pushCounter,dataCounter,wifiNetGroup,wifiCount.getElementAt(coordsCounter),url);
             success = true;
     }
     else {
@@ -406,18 +384,19 @@ bool makeDNSRequest(char *url) {
             currReq = millis();
             yield();
         }
-        if (success) {Serial.printf("[+](%d/%d) (%u.%u.%u.%u) Success: %s\n",pushCounter,dataCounter,resolvedIP[0],resolvedIP[1],resolvedIP[2],resolvedIP[3],url);}
-        else         {Serial.printf("[-](%d/%d) (%u.%u.%u.%u) Failure: %s\n",coordsCounter,wifiCount.getElementAt(coordsCounter),resolvedIP[0],resolvedIP[1],resolvedIP[2],resolvedIP[3],url);}
+        // if (success) {Serial.printf("[+](%d/%d) (%u.%u.%u.%u) Success: %s\n",pushCounter,dataCounter,resolvedIP[0],resolvedIP[1],resolvedIP[2],resolvedIP[3],url);}
+        // else         {Serial.printf("[-](%d/%d) (%u.%u.%u.%u) Failure: %s\n",coordsCounter,wifiCount.getElementAt(coordsCounter),resolvedIP[0],resolvedIP[1],resolvedIP[2],resolvedIP[3],url);}
     }
     return success;
 }
 
 void loop() {
     wifiScan(WIFI_LOG_INTERVAL);
+    smartDelay(500);
 }
 
 void printUsage() {
     FSInfo fs_info;
     SPIFFS.info(fs_info);
-    Serial.printf("Heap: %d // Flash: (%d/%d)",ESP.getFreeHeap(),fs_info.usedBytes,fs_info.totalBytes);
+    // Serial.printf("Heap: %d // Flash: (%d/%d)",ESP.getFreeHeap(),fs_info.usedBytes,fs_info.totalBytes);
 }
