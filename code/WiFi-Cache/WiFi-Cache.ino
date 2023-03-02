@@ -126,7 +126,7 @@ void logGPSDateTime() {
 
     /**** APPEND to Files in Flash  ****/
 
-    gpsLogFile.append(lat) 
+    gpsLogFile.append(lat);
     gpsLogFile.append(lon);
 
     gpsTimeFile.append(date);
