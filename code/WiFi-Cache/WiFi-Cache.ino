@@ -12,6 +12,7 @@
 #include <SoftwareSerial.h>
 #include "FS.h"
 #include "ESPFlash.h"
+#include "ESPFlashCounter.h"
 #include "Queue.h"
 #include "Base32.h"
 
@@ -38,9 +39,13 @@ uint8_t cGPSIndex = 0;
 
 /** DEFINE DATA STRUCTURES & COUNTERS **/
 
-uint32_t coordsCounter = 0; // how many coords are stored 
-uint32_t dataCounter = 0;   // TOTAL Wi-Fi entries
-uint32_t pushCounter = 0;   // Current Wi-Fi Entry to push
+// uint32_t coordsCounter = 0; // how many coords are stored 
+// uint32_t dataCounter = 0;   // TOTAL Wi-Fi entries
+// uint32_t pushCounter = 0;   // Current Wi-Fi Entry to push
+
+ESPFlashCounter coordsCounter("/cCounter");
+ESPFlashCounter dataCounter("/dCounter");
+ESPFlashCounter pushCounter("/pCounter");
 
 ESPFlash<float>    gpsLogFile("/gpsCoordFile"); // GPS Coordinates
 ESPFlash<uint32_t> gpsTimeFile("/gpsTimeFile"); // DateTime
@@ -235,7 +240,7 @@ void wifiScan(uint8_t wifiScanInterval) {
                 // // Serial.printf("(%d): %s\n",lenWiFiDataB32, wifiDataB32);
 
                 delete wifiDataB32;              
-                dataCounter++;               
+                dataCounter.increment();               
             }
             tmpExitTime = millis();
         }
@@ -250,7 +255,7 @@ void wifiScan(uint8_t wifiScanInterval) {
         /* ------------------------------------------------ */
 
         // RETURN if no new data
-        if (pushCounter >= dataCounter) { return; } 
+        if (pushCounter.get() >= dataCounter.get()) { return; } 
 
         // RETURN if no Open Networks
         int indices[networks];
@@ -290,7 +295,7 @@ void wifiScan(uint8_t wifiScanInterval) {
                 // if connection successful, create DNS requests
                 if (WiFi.status() == WL_CONNECTED) {
                     // Serial.println(" connected!");
-                    while (WiFi.status() == WL_CONNECTED and pushCounter < dataCounter) {
+                    while (WiFi.status() == WL_CONNECTED and pushCounter.get() < dataCounter.get()) {
                         bool dnsRequestSuccess = dnsRequest();
                         dnsReqFails+= !dnsRequestSuccess;
                         if (dnsReqFails > 3) {
@@ -327,10 +332,10 @@ bool dnsRequest() {
 
     bool dnsRequestSuccess;
     // start at index of last pushed
-    uint32_t startIndex = pushCounter;
+    uint32_t startIndex = pushCounter.get();
 
         /********** Get WiFi & MetaData as B32 String **********/
-        uint8_t lenCurrentWiFiData = reconLen.getElementAt(pushCounter);
+        uint8_t lenCurrentWiFiData = reconLen.getElementAt(pushCounter.get());
         char wifiDataB32[61];
         uint8_t counter = 0;
         for (uint32_t j=indexCurrentToken; j<indexCurrentToken+lenCurrentWiFiData; j++) {
@@ -339,7 +344,7 @@ bool dnsRequest() {
         }
 
         /********** Get DateTime + GPS **********/
-        char *gpsB32String = getGPSDateTimeB32(coordsCounter);
+        char *gpsB32String = getGPSDateTimeB32(coordsCounter.get());
 
         /********** MAKE DNS REQUEST **********/
         char  gpsURL[63+2+3+sizeof(CANARYTOKEN_URL)]; // 63B - GPS  B32
@@ -355,12 +360,12 @@ bool dnsRequest() {
         /********** Keep Track of GPS Coordinates Per Group **********/
         delete gpsB32String;
         wifiNetGroup++;
-        if (wifiNetGroup >= wifiCount.getElementAt(coordsCounter)) {
-            wifiNetGroup =0; coordsCounter++;
+        if (wifiNetGroup >= wifiCount.getElementAt(coordsCounter.get())) {
+            wifiNetGroup =0; coordsCounter.increment();
         }
         
         indexCurrentToken+= lenCurrentWiFiData;
-        pushCounter++;
+        pushCounter.increment();
         return dnsRequestSuccess;
 }
 
