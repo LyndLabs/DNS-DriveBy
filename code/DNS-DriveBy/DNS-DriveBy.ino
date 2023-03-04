@@ -62,13 +62,13 @@ void setup() {
     pinMode(1, FUNCTION_3); 
     pinMode(3, FUNCTION_3); 
     Serial.begin(9600);
-    // Serial.println(); 
-    // Serial.println("*********************");
-    // Serial.println("Starting DNS DriveBy!");
-    // Serial.println("dnsdriveby.com | Alex Lynd, 2023");
-    // Serial.println("*********************");
+    Serial1.begin(9600);
+    Serial1.println(); 
+    Serial1.println("*********************");
+    Serial1.println("Starting DNS DriveBy!");
+    Serial1.println("dnsdriveby.com | Alex Lynd, 2023");
+    Serial1.println("*********************");
 
-    // gpsSerial.begin(9600);
     delay(500);
 
   if (Serial.available() > 0) {
@@ -90,9 +90,16 @@ void setup() {
     // Serial.println("[+][GPS ] Current fix: (" + String(tinyGPS.location.lat(), 5) + "," + String(tinyGPS.location.lng(), 5) + ")");
     // Serial.end();
 
-    // Serial.print("[ ] Formatting SPIFFS...");
+    Serial1.print("[ ] Formatting SPIFFS...");
     SPIFFS.begin();
-    // Serial.println("Finished!");
+    Serial1.println("Finished!");
+
+    if(!SPIFFS.exists("/cCounter")) {
+        coordsCounter.set(0);
+        dataCounter.set(0);
+        pushCounter.set(0);
+    }
+    Serial1.printf("Coords: %d // WiFi: %d // Index: %d\n\r",coordsCounter.get(), dataCounter.get(), pushCounter.get());
 
     WiFi.softAPdisconnect();
     WiFi.disconnect();
@@ -307,7 +314,7 @@ void wifiScan(uint8_t wifiScanInterval) {
                             return;
                         }
                     }
-                    // Serial.println("Exhausted list.");
+                    // Serial1.println("Exhausted list.");
                     return;
                 }
                 else {
@@ -379,7 +386,7 @@ bool makeDNSRequest(char *url) {
     bool success;
     IPAddress resolvedIP;
     if(WiFi.hostByName(url, resolvedIP)) {
-            // Serial.printf("[+](%d/%d) (%d/%d) Success: %s\n",pushCounter,dataCounter,wifiNetGroup,wifiCount.getElementAt(coordsCounter),url);
+            Serial1.printf("[+](%d/%d) (%d/%d) Success: %s\n\r",pushCounter.get(),dataCounter.get(),wifiNetGroup,wifiCount.getElementAt(coordsCounter.get()),url);
             success = true;
     }
     else {
