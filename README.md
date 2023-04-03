@@ -1,5 +1,5 @@
 <p align="center">
-<img src="img/DNS-DriveBy_Logo.svg" height=150px>
+<img src="images/DNS-DriveBy_Logo.svg" height=150px>
 </p>
 
 ## What is DNS DriveBy?     
