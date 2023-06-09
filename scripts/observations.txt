@@ -1,0 +1,25 @@
+## Wigle
+- WiGLE has unique MAC Address entires, so data points can't be plotted linearly
+- [] = unknown, [ESS] = no encryption
+- 200/2467 (8% Open WiFi networks) when sorting unique MAC Addresses - by AP
+- 72/1039  (6% Open WiFi networks) when sorting unique SSID's
+
+## ESP8266
+- 768/3179 (24%) when sorting unique MAC addresses, exclude Printers
+- 442/1876 (23%) sort Unique SSID's, exclude printers
+
+- 929/2974 (31%) by MAC 
+- 602/2080 (28%) by SSID
+
+
+
+Things to compare:
+- % Open: Wigle vs ESP8266
+- OPEN Representation: discovered vs hit
+- Representation: Names (ESP8266 vs Wigle Total)
+
+Disclaimer:
+- Skewed stats: 5ghz, no multiple entries, ESSID's being conflated? 
+- DNS DriveBy vs Open Pinger: discovering vs connecting times
+- internal memory caching speeds, different antenna being used
+- printers, and spam networks?  better rep for connection / algorithm...

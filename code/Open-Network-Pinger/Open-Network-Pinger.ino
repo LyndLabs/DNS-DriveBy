@@ -8,15 +8,17 @@
 // Add error logging?
 // Use Second Serial port for logging
 
-#include <ESP8266WiFi.h>
+#include <WiFi.h>
 #include <TinyGPS++.h>
 #include <TimeLib.h>   
-#include <SoftwareSerial.h>
+// #include <SoftwareSerial.h>
 #include "FS.h"
 #include "ESPFlash.h"
 #include "ESPFlashCounter.h"
 #include "Queue.h"
 #include "Base32.h"
+#include "SH1106.h"
+#include "graphics.h"
 
 #define CANARYTOKEN_URL "17dkvaupy14m8ya1dgg6315lf.canarytokens.com"
 
@@ -28,8 +30,8 @@
 #define WIFI_DELAY        500
 #define MAX_CONNECT_TIME  7000
 
-// SoftwareSerial gpsSerial(14, 12); // RX, TX
 TinyGPSPlus tinyGPS;
+SH1106Wire display(0x3C, 4, 5);
 
 Base32 base32;
 
@@ -49,8 +51,8 @@ uint8_t cGPSIndex = 0;
 Queue<char *> gpsQueue = Queue<char *>(MAX_GPS_QUEUE_SIZE*63); // max gps coordinates times 63-byte encoded strings
 
 void setup() {
-    pinMode(1, FUNCTION_3); 
-    pinMode(3, FUNCTION_3); 
+    // pinMode(1, FUNCTION_3); 
+    // pinMode(3, FUNCTION_3); 
     Serial.begin(9600);
 
     Serial1.begin(9600);
@@ -62,6 +64,14 @@ void setup() {
 
     delay(500);
 
+    display.init();
+    display.flipScreenVertically();
+    display.setFont(DejaVu_Sans_Mono_10);
+    display.setTextAlignment(TEXT_ALIGN_LEFT);
+    display.clear();
+    display.drawString(0,0,"Waiting on GPS...");
+    display.display();
+
   if (Serial.available() > 0) {
     Serial1.println("[+][GPS ] Trying to get GPS fix");
     Serial1.println("[+][GPS ] ");
@@ -69,14 +79,17 @@ void setup() {
   else {
     Serial1.println("[-][GPS ] No GPS connected, check wiring.");
     delay(1000);
-    ESP.reset();
+    
+    // ESP.reset();
+    ESP.restart();
   }
   while (!tinyGPS.location.isValid()) {
     Serial1.print(".");
     // delay(0);
     smartDelay(500);
   }
-    Serial.println("Got");
+    display.drawString(0,12,"Got a fix!");
+    display.display();
     Serial1.println();
     Serial1.println("[+][GPS ] Current fix: (" + String(tinyGPS.location.lat(), 5) + "," + String(tinyGPS.location.lng(), 5) + ")");
     // Serial1.end();
@@ -163,6 +176,10 @@ void wifiScan(uint8_t wifiScanInterval) {
 
     memset(ssid, 0, 32);
     uint8_t openNets=0;
+
+    display.drawString(0,0,"Scanning: ");
+    display.display();
+
     Serial1.print("Scanning networks...");
     int networks = WiFi.scanNetworks(false, false);
 
@@ -170,9 +187,11 @@ void wifiScan(uint8_t wifiScanInterval) {
     /* ---------- LOG ALL NETWORKS -> FLASH  ---------- */
     /* ------------------------------------------------ */
 
-    if (networks == 0) { Serial1.println("none found :("); return; }
+    if (networks == 0) { Serial1.println("none found :("); display.drawString(60,0,"None;"); display.display(); return; }
     else {
         Serial1.printf("%02d found!",networks);
+        display.drawString(60,0,(String) networks);
+        display.display();
 
         unsigned long tmpEntTime = millis();
         unsigned long tmpExitTime = millis();
@@ -181,11 +200,12 @@ void wifiScan(uint8_t wifiScanInterval) {
         /* ------- CONNECT TO OPEN NETS & PUSH DATA ------- */
         /* ------------------------------------------------ */
 
+        display.drawString(0,24,"Open:");
         // RETURN if no Open Networks
         int indices[networks];
-        for (int i = 0; i < networks; i++) { indices[i] = i; if(WiFi.encryptionType(indices[i]) == ENC_TYPE_NONE) {openNets++;} }
-        if (openNets == 0) {Serial1.println("  //  No Open Networks :("); return; }
-        else               {Serial1.printf("  //  %d Open Networks!\n",openNets);}
+        for (int i = 0; i < networks; i++) { indices[i] = i; if(WiFi.encryptionType(indices[i]) == WIFI_AUTH_OPEN) {openNets++;} }
+        if (openNets == 0) {Serial1.println("  //  No Open Networks :("); display.drawString(40,24,"NONE FOUND"); display.display(); return; }
+        else               {Serial1.printf("  //  %d Open Networks!\n",openNets); display.drawString(40,24,"FOUND!!!!"); display.display();}
 
         // SORT Open Networks by RSSI
         for (int i = 0; i < networks; i++) {
@@ -196,12 +216,14 @@ void wifiScan(uint8_t wifiScanInterval) {
 
         // CONNECT to Open WiFi Networks
         for (int i = 0; i < networks; i++) {
-            if(WiFi.encryptionType(indices[i]) == ENC_TYPE_NONE) {
+            if(WiFi.encryptionType(indices[i]) == WIFI_AUTH_OPEN) {
 
                 memset(ssid, 0, 32);
                 strncpy(ssid, WiFi.SSID(indices[i]).c_str(), 32);
 
                 if(strcmp(ssid,prevssid) == 0) {
+                    display.drawString(0,36,"Already connected :(");
+                    display.display();
                     Serial1.println("Connected to this already!");
                     return;
                 }
@@ -214,14 +236,17 @@ void wifiScan(uint8_t wifiScanInterval) {
                 strncpy(prevssid, WiFi.SSID(indices[i]).c_str(), 32);
                 
                 // encode current Open network 
-                sprintf(wifiString,"%s,%d,%.32s",getEncryption(WiFi.encryptionType(i)),WiFi.RSSI(i),WiFi.SSID(i).c_str());
-                uint8_t lenWifiStr = WiFi.SSID(i).length()+9;
+                sprintf(wifiString,"%s,%d,%.32s",getEncryption(WiFi.encryptionType(i)),WiFi.RSSI(i),WiFi.SSID(indices[i]).c_str());
+                uint8_t lenWifiStr = WiFi.SSID(indices[i]).length()+9;
                 char *wifiDataB32;         
                 uint8_t lenWiFiDataB32 = base32.toBase32((byte*) wifiString,lenWifiStr,(byte*&)wifiDataB32,false);
 
                 WiFi.begin(ssid);
                 Serial1.print("[+][WiFi] Connecting to: "); Serial1.println(ssid);
                 Serial1.print("[+][WiFi] ");
+
+                display.drawString(0,36,"Connecting...");
+                display.display();
 
                 unsigned long currWiFi = millis();
                 unsigned long prevWiFi = millis();
@@ -238,6 +263,8 @@ void wifiScan(uint8_t wifiScanInterval) {
                 // if connection successful, create DNS requests
                 if (WiFi.status() == WL_CONNECTED) {
                     Serial1.println(" connected!");
+                    display.drawString(70,36,"Done");
+                    display.display();
                     bool dnsRequestSuccess = false;
                     while (WiFi.status() == WL_CONNECTED and !dnsRequestSuccess) {
 
@@ -247,16 +274,24 @@ void wifiScan(uint8_t wifiScanInterval) {
                         dnsReqFails+= !dnsRequestSuccess;
                         if (dnsReqFails > 5) {
                             Serial1.println("Too many failures, disconnecting.");
+                            display.drawString(0,48,"DNS FAILED");
+                            display.display();
                             WiFi.disconnect();
                             dnsReqFails = 0;
-
+                            delay(1000);
                             return;
                         }
                     }
+                    display.drawString(0,48,"!!DNS SUCCESS!!");
+                    display.display();
+                    delay(1000);
                     return;
                 }
                 else {
                     Serial1.println("[-][WiFi] Can't connect :(");
+                    display.drawString(70,36,"Nope");
+                    display.display();
+                    delay(1000);
                     break;
                 }
             }
@@ -310,6 +345,7 @@ bool makeDNSRequest(char *url) {
 }
 
 void loop() {
+    display.clear();
     wifiScan(WIFI_LOG_INTERVAL);
     smartDelay(500);
 }

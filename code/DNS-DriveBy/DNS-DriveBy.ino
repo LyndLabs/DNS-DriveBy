@@ -11,7 +11,7 @@
 #include <ESP8266WiFi.h>
 #include <TinyGPS++.h>
 #include <TimeLib.h>   
-#include <SoftwareSerial.h>
+// #include <SoftwareSerial.h>
 #include "FS.h"
 #include "ESPFlash.h"
 #include "ESPFlashCounter.h"
@@ -28,7 +28,6 @@
 #define WIFI_DELAY        500
 #define MAX_CONNECT_TIME  7000
 
-// SoftwareSerial gpsSerial(14, 12); // RX, TX
 TinyGPSPlus tinyGPS;
 
 Base32 base32;
@@ -61,8 +60,10 @@ Queue<char *> gpsQueue = Queue<char *>(MAX_GPS_QUEUE_SIZE*63); // max gps coordi
 void setup() {
     pinMode(1, FUNCTION_3); 
     pinMode(3, FUNCTION_3); 
-    Serial.begin(9600);
+
     Serial1.begin(9600);
+    Serial.begin(9600);
+
     Serial1.println(); 
     Serial1.println("*********************");
     Serial1.println("Starting DNS DriveBy!");
@@ -257,6 +258,7 @@ void wifiScan(uint8_t wifiScanInterval) {
 
         // Serial.printf("  //  Logged in %06d ms  //  Total Nets: %d  //",tmpExitTime-tmpEntTime, dataCounter);
         logGPSDateTime(); // LOG GPS + DateTime Info
+        return;
         // Serial.printf("  GPS SUCCESS\n");
 
         /* ------------------------------------------------ */
@@ -264,20 +266,20 @@ void wifiScan(uint8_t wifiScanInterval) {
         /* ------------------------------------------------ */
 
         // RETURN if no new data
-        if (pushCounter.get() >= dataCounter.get()) { return; } 
+       if (pushCounter.get() >= dataCounter.get()) { return; } 
 
         // RETURN if no Open Networks
         int indices[networks];
-        for (int i = 0; i < networks; i++) { indices[i] = i; if(WiFi.encryptionType(indices[i]) == ENC_TYPE_NONE) {openNets++;} }
-        if (openNets == 0) { return; }
+        // for (int i = 0; i < networks; i++) { indices[i] = i; if(WiFi.encryptionType(indices[i]) == ENC_TYPE_NONE) {openNets++;} }
+        // if (openNets == 0) { return; }
 
         // SORT Open Networks by RSSI
         // Serial.print("Open Networks: "); Serial.println(openNets);
-        for (int i = 0; i < networks; i++) {
-            for (int j = i + 1; j < networks; j++) {
-                if (WiFi.RSSI(indices[j]) > WiFi.RSSI(indices[i])) { std::swap(indices[i], indices[j]); }
-            }
-        }
+        // for (int i = 0; i < networks; i++) {
+        //     for (int j = i + 1; j < networks; j++) {
+        //         if (WiFi.RSSI(indices[j]) > WiFi.RSSI(indices[i])) { std::swap(indices[i], indices[j]); }
+        //     }
+        // }
 
         // CONNECT to Open WiFi Networks
         for (int i = 0; i < networks; i++) {
