@@ -10,10 +10,22 @@ DNS-Driveby is a $10 tracker that uses Open Wi-Fi networks for telemetry & recon
 - Using DNS DriveBy as a GPS Tracker - [Hak5](https://youtu.be/H0Nwff0KDJ0?t=151)
 
 ## Build Instructions
-Coming soon!  Reference the Hackster.io article for components.
+[Assembly Guide](https://dnsdriveby.com/guides/get-started/assembly/)
 
-## Changelog v1.1
-- MircoSD Card
+## Changelog v1.2
+- MicroSD Card Support
 - JST Switch connector?
 - Route LiPo under board
 - SH1106 / SSD1306 Add-On
+
+## To-Do
+- Fix GPS Traces
+- Larger Resistor Footprint
+- Improved BMS
+
+- Screen Support
+- Build Custom Binary
+- OTA Update via Web Interface
+
+## Documented Issues (Note to Self / Future Docs)
+- Arduino-CLI VSCode Plugin doesn't support SPIFFS build
