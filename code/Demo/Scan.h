@@ -6,10 +6,13 @@
 #include <ESP8266WiFi.h>
 #include <TinyGPSPlus.h>
 #include <SoftwareSerial.h>
+#include "Screen.h"
 
 TinyGPSPlus tinyGPS;
 SoftwareSerial ss(GPSRX, GPSTX);
 Base32 base32;
+
+extern SH1106Wire display;
 
 char gpsDateTimeStr[39];
 char *gpsDateTimeB32;   
@@ -28,15 +31,23 @@ uint8_t initGPS() {
     delay(500);
     if (ss.available() > 0) {
         Serial.print("[+][GPS ] GPS found!  Trying to get fix");
+        drawMockup("...","...",0,0,0,0,"Waiting for GPS ...");
         while (!tinyGPS.location.isValid()) {
             Serial.print("."); delay(0);
             smartDelay(500);
         }
         Serial.println();
         Serial.println("[+][GPS ] Current fix: (" + String(tinyGPS.location.lat(), 5) + "," + String(tinyGPS.location.lng(), 5) + ")");
+        char currentGPS[17];
+        sprintf(currentGPS,"%1.3f,%1.3f",tinyGPS.location.lat(),tinyGPS.location.lng());
+        
+        char currTime[6];
+        sprintf(currTime,"%02d,%02d",tinyGPS.time.hour(),tinyGPS.time.minute());
+
+        drawMockup(currentGPS,currTime,gps.satellites.value(),0,0,0,"GPS SUCCESS");
         return 1;
     }
-    Serial.println("[+][GPS ] No GPS detected, check wiring :(");
+    drawMockup("...","...",0,0,0,0,"GPS NOT DETECTED");
     return 0;
 }
 
@@ -89,16 +100,6 @@ void deInitWiFi() {
 /* ---------      Scan Networks & Return How Many      --------- */
 /* --------------------------------------------------------------*/
 
-
-
-
-// #include <TimeLib.h>   
-
-// #include "SH1106.h"
-// #include "graphics.h"
-
-// #define CANARYTOKEN_URL "17dkvaupy14m8ya1dgg6315lf.canarytokens.com"
-
 #define WIFI_LOG_INTERVAL 2
 #define MAX_GPS_BUFFER_SIZE 10
 #define MAX_GPS_QUEUE_SIZE 50
@@ -106,29 +107,6 @@ void deInitWiFi() {
 
 #define WIFI_DELAY        500
 #define MAX_CONNECT_TIME  7000
-
-
-// SH1106Wire display(0x3C, 4, 5);
-
-
-// unsigned long pTime = millis(); 
-
-// float cGPS[MAX_GPS_BUFFER_SIZE][2];        // lat, long
-// uint32_t cGPSTime[MAX_GPS_BUFFER_SIZE][2]; // date, time
-// uint8_t cGPSIndex = 0;
-
-
-/* -------------------------------------------------------------*/
-/* ------------ Return GPS + DateTime as B32 String ------------*/
-/* -------------------------------------------------------------*/
-
-// char *getGPSDateTimeB32() {
-
-
-   
-    
-
-// }
 
 /* --------------------------------------------------------------*/
 /* Scans & logs WiFi networks & attempts to connect to open nets */
@@ -184,12 +162,6 @@ bool connectToOpen() {
 
                 memset(prevssid, 0, 32);
                 strncpy(prevssid, WiFi.SSID(indices[i]).c_str(), 32);
-                
-                // encode current Open network 
-                // sprintf(wifiString,"%s,%d,%.32s",getEncryption(WiFi.encryptionType(i)),WiFi.RSSI(i),WiFi.SSID(indices[i]).c_str());
-                // uint8_t lenWifiStr = WiFi.SSID(indices[i]).length()+9;
-                // char *wifiDataB32;         
-                // uint8_t lenWiFiDataB32 = base32.toBase32((byte*) wifiString,lenWifiStr,(byte*&)wifiDataB32,false);
 
                 WiFi.begin(ssid);
 
@@ -302,11 +274,6 @@ void makeDNSRequest() {
 // /*  ----------------- Make DNS Request to URL ------------------ */
 // /* --------------------------------------------------------------*/
 
-// // void loop() {
-// //     display.clear();
-// //     wifiScan(WIFI_LOG_INTERVAL);
-// //     smartDelay(500);
-// // }
 char *getEncryption(uint8_t network) {
   byte encryption = WiFi.encryptionType(network);
   switch (encryption) {
@@ -326,8 +293,7 @@ char *getEncryption(uint8_t network) {
 
 void printNetworks() {
     for (int i = 0; i < networks; i++) {
-    Serial.print(getEncryption(i)); Serial.print(", ");
-    Serial.println(WiFi.SSID(i));
+    Serial.printf("     *%s, %s\n\r",getEncryption(i),WiFi.SSID(i).c_str);
   }
 }
 
