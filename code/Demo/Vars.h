@@ -1,1 +1,0 @@
-#define CANARYTOKEN_URL "acg14c8fy6076897ma9xzrpt8.canarytokens.com"

@@ -1,0 +1,1 @@
+#define CANARYTOKEN_URL

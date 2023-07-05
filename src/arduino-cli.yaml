@@ -1,0 +1,24 @@
+board_manager:
+  additional_urls: ["https://arduino.esp8266.com/stable/package_esp8266com_index.json"]
+daemon:
+  port: "50051"
+directories:
+  data: /root/.arduino15
+  downloads: /root/.arduino15/staging
+  user: /root/Arduino
+library:
+  enable_unsafe_install: true
+logging:
+  file: ""
+  format: text
+  level: info
+metrics:
+  addr: :9090
+  enabled: true
+output:
+  no_color: false
+sketch:
+  always_export_binaries: false
+updater:
+  enable_notification: true
+
