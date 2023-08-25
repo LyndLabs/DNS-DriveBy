@@ -7,7 +7,9 @@ submodules:
 	git submodule update
 
 build:
-	echo "#define CANARYTOKEN_URL \"$(canaryurl)\"" > ./Demo/Vars.h
+	@echo "Enter the Canary token URL: "; \
+	read canaryurl; \
+	echo "#define CANARYTOKEN_URL \"$$canaryurl\"" > ./Demo/Vars.h
 	docker build . --file Dockerfile --tag dnsdriveby
 
 flash: check_port build

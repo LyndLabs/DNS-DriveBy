@@ -10,7 +10,7 @@ static uint8_t initScreen(uint8_t SCL, uint8_t SDA, uint8_t addr) {
     return 0;
 }
 
-void drawMockup(char* gpscoords, char* time, uint8_t sats, uint8_t nets, uint8_t reqs, uint8_t open, char* message) {
+void drawMockup(const char* gpscoords, const char* time, uint8_t sats, uint8_t nets, uint8_t reqs, uint8_t open, const char* message) {
     display.clear();
     display.drawLine(0,12,127,12);
     display.drawLine(0,49,127,49);

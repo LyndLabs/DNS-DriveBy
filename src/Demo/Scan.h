@@ -313,19 +313,19 @@ void makeDNSRequest() {
 // /*  ----------------- Make DNS Request to URL ------------------ */
 // /* --------------------------------------------------------------*/
 
-char *getEncryption(uint8_t network) {
+const char* getEncryption(uint8_t network) {
   byte encryption = WiFi.encryptionType(network);
   switch (encryption) {
     case 5: 
-        return "WEP"; // WEP
+      return "WEP";
     case 2: 
-        return "WPA"; // WPA
+      return "WPA";
     case 4: 
-        return "WPA2"; // WPA2
+      return "WPA2";
     case 7: 
-        return "NONE"; // NONE
+      return "NONE";
     case 8: 
-        return "AUTO"; // AUTO
+      return "AUTO";
   }
   return "AUTO"; // AUTO / fail case
 }
