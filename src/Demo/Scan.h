@@ -245,6 +245,32 @@ void encodeB32() {
 }
 
 /* --------------------------------------------------------------*/
+/*           Encode latest WiFi & GPS to Base32 String           */
+/*   but this time do it without appending the SSID to the end.  */
+/*   if DNS call fails, reduce length of subdomain and try again */
+/* --------------------------------------------------------------*/
+
+
+void encodeB32withoutSSID() {
+    char dest[72]; // 39, 32
+
+    strcpy(dest, gpsDateTimeStr);
+    strcat(dest,",");
+    //strcat(dest, ssid );
+
+    Serial.print("[+] Encoding: "); Serial.println(dest);
+    drawMockup(currentGPS,currTime,sats,nets,reqs,opn,"Making request...");
+    
+
+    // encode WiFi & GPS to Base32
+    //uint8_t tmpln = 40 + ssidLen;
+    uint8_t tmpln = 40;
+    lenReconStr = base32.toBase32((byte*) dest,tmpln,(byte*&)gpsDateTimeB32,false);
+    Serial.printf("(%d) %s", lenReconStr, gpsDateTimeB32);
+    
+}
+
+/* --------------------------------------------------------------*/
 /*                Make DNS Request -> CanaryToken                */
 /* --------------------------------------------------------------*/
 
@@ -293,8 +319,20 @@ void makeDNSRequest() {
     while (WiFi.status() == WL_CONNECTED and !dnsRequestSuccess) {
         dnsRequestSuccess = dnsRequest(gpsDateTimeB32,lenReconStr); // make request w/ String & length
         dnsReqFails+= !dnsRequestSuccess;
-        
-        if (dnsReqFails > 5) {
+
+        // after 2 failures, try dropping the SSID from the token
+        // this solves for the ceiling on the length of a URL that
+        // can be requested from the ESP8266 WiFi.hostByName function
+        // in the case that the SSID is making the string larger than can be handled
+        if (dnsReqFails == 2) {
+          Serial.println("[-] 2 failures, try without SSID");
+          // regenerate gpsDateTimeB32 without SSID
+          encodeB32withoutSSID();
+          dnsRequestSuccess = dnsRequest(gpsDateTimeB32,lenReconStr); // make request w/ String & length
+          dnsReqFails+= !dnsRequestSuccess;
+        }
+      
+        if (dnsReqFails > 3) {
             Serial.println("[-] Too many failures, disconnecting.");
             drawMockup(currentGPS,currTime,sats,nets,reqs,opn,"DNS FAILED :(");
             WiFi.disconnect();
