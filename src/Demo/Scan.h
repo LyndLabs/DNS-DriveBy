@@ -303,9 +303,13 @@ void makeDNSRequest() {
             return;
         }
 
+        //check for success before reporting success
+        if (dnsRequestSuccess) {
         Serial.println("[+][DNS] Success making request!");
-        reqs++;
         drawMockup(currentGPS,currTime,sats,nets,reqs,opn,"DNS SUCCESS");
+        }
+        
+        reqs++;
     }
 }
 
