@@ -1,5 +1,5 @@
-#define GPSRX D3
-#define GPSTX D4
+#define GPSRX D4
+#define GPSTX D3
 
 #include "Vars.h"
 #include "Base32.h"
